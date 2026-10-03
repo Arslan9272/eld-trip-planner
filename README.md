@@ -16,7 +16,7 @@ Property-carrying driver on the 70-hour / 8-day cycle, no adverse driving condit
 | 11 hours of driving per shift | 10-hour sleeper-berth rest |
 | No driving after the 14th hour since coming on duty | 10-hour sleeper-berth rest |
 | 30-minute break after 8 hours of driving | Off-duty break, unless 30 consecutive non-driving minutes (pickup, fuel) already reset the clock |
-| 70 hours on duty in 8 days | 34-hour restart before the next pre-trip would run past the limit |
+| 70 hours on duty in 8 days | 34-hour restart. When the hours left can't cover another full shift, the rest of the trip is planned both ways (10-hour rest first, or restart now) and the faster plan is kept |
 | Fuel at least every 1,000 miles | 30 minutes on duty, before the 1,000th mile |
 | Pickup and drop-off | 1 hour on duty each |
 | Pre-trip inspection | 30 minutes on duty at the start of each shift |
@@ -24,8 +24,9 @@ Property-carrying driver on the 70-hour / 8-day cycle, no adverse driving condit
 Assumptions:
 
 - Times are home-terminal time: the clock of the start time entered, never shifted when the route crosses a time zone.
-- Everything moves in quarter hours, like the paper grid. Each leg's drive time rounds to the nearest 15 minutes.
+- Everything moves in quarter hours, like the paper grid. Each leg's drive time rounds to the nearest 15 minutes; the start time and the hours already used round up.
 - The driver starts the trip rested. "Hours used" comes without day-by-day history, so those hours stay on the books for the whole trip and only a 34-hour restart frees them. The recap's 7-day and 8-day lines show that same total.
+- Loading or unloading may carry the cycle past 70 hours after the last drive. That is legal (no driving happens past the limit), and the summary and sheet say so.
 - Rests are full 10-hour sleeper-berth periods; split sleeper berth (7/3, 8/2) is not planned.
 - Without an OpenRouteService key, routes come from the public OSRM server, which uses car speeds. With `ORS_API_KEY` set, the backend asks for a truck (HGV) route and falls back to OSRM if that fails.
 

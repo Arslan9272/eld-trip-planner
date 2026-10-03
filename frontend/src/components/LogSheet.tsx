@@ -44,6 +44,17 @@ function dutyLine(segments: DayLog['segments']) {
   return { d, length }
 }
 
+// Remarks closer than 45 minutes step their flags down so the slanted labels don't touch.
+function remarkFlags(remarks: DayLog['remarks']) {
+  const flags: (DayLog['remarks'][number] & { x: number; drop: number })[] = []
+  for (const remark of remarks) {
+    const previous = flags[flags.length - 1]
+    const drop = previous && remark.minute - previous.minute < 45 ? previous.drop + 14 : 0
+    flags.push({ ...remark, x: xAt(remark.minute), drop })
+  }
+  return flags
+}
+
 const RECAP_LABELS: [number, string[]][] = [
   [152, ['On duty', 'hours', 'today,', 'Total lines', '3 & 4']],
   [312, ['A. Total', 'hours on', 'duty last 7', 'days', 'including', 'today.']],
@@ -74,11 +85,13 @@ export function LogSheet({ log, header, onHeaderChange }: Props) {
   const [drawn, setDrawn] = useState(false)
   const line = dutyLine(log.segments)
   const [year, month, day] = log.date.split('-')
+  const flags = remarkFlags(log.remarks)
+  // Centred right of the printed "A." / "B." / "C." so values like 26.75 clear the letters.
   const recap = [
     [188, log.recap.on_duty_today],
-    [346, log.recap.last_7_days],
-    [426, log.recap.available_tomorrow],
-    [506, log.recap.last_8_days],
+    [355, log.recap.last_7_days],
+    [435, log.recap.available_tomorrow],
+    [515, log.recap.last_8_days],
   ]
 
   useEffect(() => {
@@ -258,17 +271,19 @@ export function LogSheet({ log, header, onHeaderChange }: Props) {
                   style={{ '--at': s.start / 1440 } as CSSProperties}
                 />
               ))}
-            {log.remarks.map((remark) => {
-              const x = xAt(remark.minute)
-              return (
-                <g key={`${remark.minute}-${remark.kind}`} className="ink-fade" style={{ '--at': remark.minute / 1440 } as CSSProperties}>
-                  <path d={`M${x} ${GRID_BOTTOM}V514`} stroke="#1B3A8C" strokeWidth="1.4" />
-                  <text transform={`translate(${x - 2} 520) rotate(-45)`} textAnchor="end" fontSize="13">
-                    {remark.place} ({KIND[remark.kind].remark})
-                  </text>
-                </g>
-              )
-            })}
+            {flags.map(({ minute, kind, place, x, drop }) => (
+              <g key={`${minute}-${kind}`} className="ink-fade" style={{ '--at': minute / 1440 } as CSSProperties}>
+                <path d={`M${x} ${GRID_BOTTOM}V${514 + drop}`} stroke="#1B3A8C" strokeWidth="1.4" />
+                <text transform={`translate(${x - 2} ${520 + drop}) rotate(-45)`} textAnchor="end" fontSize="13">
+                  {place} ({KIND[kind].remark})
+                </text>
+              </g>
+            ))}
+            {log.recap.last_7_days > 70 * 60 && (
+              <text className="ink-fade" x="380" y="712" fontSize="14" style={{ '--at': 1 } as CSSProperties}>
+                Past 70 hrs on duty only for non-driving work. No driving past the limit.
+              </text>
+            )}
             <g className="ink-fade" fontSize="20" textAnchor="middle" style={{ '--at': 1 } as CSSProperties}>
               {ROWS.map((status, row) => (
                 <text key={status} x="915" y={GRID_TOP + row * ROW + 24}>
@@ -276,6 +291,8 @@ export function LogSheet({ log, header, onHeaderChange }: Props) {
                 </text>
               ))}
               <text x="915" y="522">24</text>
+            </g>
+            <g className="ink-fade" fontSize="18" textAnchor="middle" style={{ '--at': 1 } as CSSProperties}>
               {recap.map(([x, minutes]) => (
                 <text key={x} x={x} y="880">
                   {hours(minutes)}

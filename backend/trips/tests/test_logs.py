@@ -71,6 +71,19 @@ class LogTests(TestCase):
             day2["recap"], {"on_duty_today": 270, "last_7_days": 270, "available_tomorrow": 3930, "last_8_days": 270}
         )
 
+    def test_stop_carried_past_midnight_gets_a_remark_where_driving_resumes(self):
+        # 23:45 start: the pre-trip runs to 00:15 on the second sheet, then the truck moves off.
+        events = plan([Leg(250, 240, ()), Leg(60, 60, ())], datetime(2026, 10, 5, 23, 45), 0)
+        day1, day2 = build_logs(events, place)
+        self.assertEqual(day1["remarks"], [{"minute": 1425, "place": "mile 0", "kind": "pretrip"}])
+        self.assertEqual(day2["remarks"][0], {"minute": 15, "place": "mile 0", "kind": "drive"})
+
+    def test_daily_miles_add_up_to_the_trip(self):
+        events = plan([Leg(150.4, 150, ()), Leg(3000.3, 2880, ())], datetime(2026, 10, 5, 22, 30), 0)
+        logs = build_logs(events, place)
+        self.assertEqual(sum(day["miles"] for day in logs), round(150.4 + 3000.3))
+        self.assertTrue(all(isinstance(day["miles"], int) for day in logs))
+
     def test_trip_ending_at_midnight_has_no_extra_day(self):
         events = plan([Leg(0, 0, ()), Leg(60, 60, ())], datetime(2026, 10, 5, 20, 30), 0)
         self.assertEqual(events[-1].end, datetime(2026, 10, 6))

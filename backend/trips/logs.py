@@ -1,4 +1,6 @@
+import math
 from datetime import datetime, time, timedelta
+from itertools import pairwise
 
 from .planner import CYCLE_LIMIT, ON_DUTY
 
@@ -46,6 +48,10 @@ def day_log(events, spans, midnight, place_at):
         for event in events
         if event.status != "driving" and midnight <= event.start < day_end
     ]
+    # A stop carried over from the previous sheet still needs a place where the truck moves off.
+    for stop, drive in pairwise(events):
+        if stop.status != "driving" and stop.start < midnight < stop.end <= day_end and drive.status == "driving":
+            remarks.insert(0, {"minute": minutes(stop.end - midnight), "place": place_at(drive.start_mile), "kind": "drive"})
     release = events[-1].end
     if midnight < release <= day_end:
         remarks.append({"minute": minutes(release - midnight), "place": place_at(events[-1].end_mile), "kind": "off"})
@@ -56,7 +62,8 @@ def day_log(events, spans, midnight, place_at):
         "date": midnight.date().isoformat(),
         "from": place_at(start_mile),
         "to": place_at(end_mile),
-        "miles": round(end_mile - start_mile, 1),
+        # Whole miles from rounded odometer readings, so the days add up to the trip.
+        "miles": whole(end_mile) - whole(start_mile),
         "segments": segments,
         "totals": totals,
         "remarks": remarks,
@@ -85,6 +92,10 @@ def in_progress(events, moment):
         if moment < event.end:
             return event, max(moment - event.start, timedelta(0))
     return events[-1], events[-1].end - events[-1].start
+
+
+def whole(mile):
+    return math.floor(mile + 0.5)
 
 
 def minutes(delta):

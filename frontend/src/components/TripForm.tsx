@@ -59,7 +59,9 @@ export function TripForm({ initial, busy, error, onPlan }: Props) {
     const results = await Promise.allSettled(STOPS.map(([key]) => resolvePlace(form[key])))
     setResolving(false)
 
-    const next = { ...form }
+    // The planner counts in quarter hours and never rounds hours already worked down.
+    const cycle = Math.ceil(used * 4) / 4
+    const next = { ...form, cycle: usedValid ? String(cycle) : form.cycle }
     results.forEach((result, i) => {
       const key = STOPS[i][0]
       if (result.status === 'fulfilled') next[key] = { text: result.value.name, place: result.value }
@@ -74,7 +76,7 @@ export function TripForm({ initial, busy, error, onPlan }: Props) {
         current: next.current.place!,
         pickup: next.pickup.place!,
         dropoff: next.dropoff.place!,
-        cycle_used: used,
+        cycle_used: cycle,
         start: next.start,
       },
       next,

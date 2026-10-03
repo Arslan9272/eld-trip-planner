@@ -53,6 +53,12 @@ export function TripSummary({ plan, input, onEdit }: Props) {
           </div>
         ))}
       </div>
+      {summary.cycle_used_end > 70 && (
+        <p className="text-[13px] leading-snug text-muted">
+          The hours past 70 are loading or unloading after the last drive. The rules allow on-duty work past the limit,
+          not driving.
+        </p>
+      )}
     </div>
   )
 }

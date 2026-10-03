@@ -1,3 +1,4 @@
+import copy
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -41,10 +42,7 @@ class Event:
 
 def plan(legs, start, cycle_used_hours):
     trip = Trip(start, cycle_used_hours)
-    trip.drive(legs[0])
-    trip.add("pickup", "on", PICKUP)
-    trip.drive(legs[1])
-    trip.add("dropoff", "on", DROPOFF)
+    trip.finish(legs, legs[0].minutes)
     return trip.events
 
 
@@ -54,7 +52,8 @@ def floor15(minutes):
 
 class Trip:
     def __init__(self, start, cycle_used_hours):
-        self.start = start.replace(minute=start.minute - start.minute % 15, second=0, microsecond=0)
+        # Round up: the driver can't go on duty before the time given.
+        self.start = start.replace(second=0, microsecond=0) + timedelta(minutes=-start.minute % 15)
         self.t = 0  # minutes since trip start
         self.mile = 0.0
         # Quarter-hour grid; rounding up never under-counts hours already used.
@@ -63,6 +62,7 @@ class Trip:
         self.not_driving = 0
         self.miles_since_fuel = 0.0
         self.events = []
+        self.compare_restarts = True
         self.new_shift()
 
     def new_shift(self):
@@ -70,8 +70,17 @@ class Trip:
         self.shift_driving = 0
         self.pretrip_due = True
 
-    def drive(self, leg):
-        left = leg.minutes
+    def finish(self, legs, left):
+        # Drive the last `left` minutes of legs[0], then everything after it.
+        self.drive(legs, left)
+        if len(legs) > 1:
+            self.add("pickup", "on", PICKUP)
+            self.finish(legs[1:], legs[1].minutes)
+        else:
+            self.add("dropoff", "on", DROPOFF)
+
+    def drive(self, legs, left):
+        leg = legs[0]
         while left > 0:
             cycle_left = CYCLE_LIMIT - self.cycle
             shift_over = self.shift_driving >= MAX_DRIVING or self.t >= self.window_end
@@ -79,12 +88,12 @@ class Trip:
             # Restart once the hours left can't cover the next pre-trip. A restart is also
             # longer than a 10-hour rest, so it replaces one that is due.
             if cycle_left - (PRETRIP if self.pretrip_due or shift_over else 0) <= 0:
-                self.add("restart", "off", RESTART)
-                self.cycle = 0
-                self.new_shift()
+                self.restart()
             elif shift_over:
-                self.add("rest", "sleeper", REST)
-                self.new_shift()
+                if self.restart_is_sooner(legs, left):
+                    self.restart()
+                else:
+                    self.rest()
             elif self.pretrip_due:
                 self.add("pretrip", "on", PRETRIP)
                 self.pretrip_due = False
@@ -104,6 +113,30 @@ class Trip:
                 )
                 self.add("drive", "driving", minutes, leg.miles * minutes / leg.minutes)
                 left -= minutes
+
+    def rest(self):
+        self.add("rest", "sleeper", REST)
+        self.new_shift()
+
+    def restart(self):
+        self.add("restart", "off", RESTART)
+        self.cycle = 0
+        self.new_shift()
+
+    def restart_is_sooner(self, legs, left):
+        # When the 70 hours can't cover another full shift, a 10-hour rest may only buy a short
+        # drive before a 34-hour restart anyway. Plan the rest of the trip both ways and keep the
+        # faster; on a tie the restart wins, as it skips that short shift.
+        if not self.compare_restarts or CYCLE_LIMIT - self.cycle - PRETRIP >= MAX_DRIVING:
+            return False
+        resting, restarting = copy.deepcopy(self), copy.deepcopy(self)
+        for trial in (resting, restarting):
+            trial.compare_restarts = False
+        resting.rest()
+        restarting.restart()
+        resting.finish(legs, left)
+        restarting.finish(legs, left)
+        return restarting.t <= resting.t
 
     def add(self, kind, status, minutes, miles=0.0):
         start = self.start + timedelta(minutes=self.t)

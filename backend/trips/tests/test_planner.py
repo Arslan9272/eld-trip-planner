@@ -30,9 +30,10 @@ class PlannerTests(TestCase):
         [day] = build_logs(events, str)
         self.assertEqual(sum(day["totals"].values()), 1440)
 
-    def test_start_floors_to_the_quarter_hour(self):
-        events = plan([leg(60, 60), leg(60, 60)], START.replace(minute=14, second=59), 0)
-        self.assertEqual(events[0].start, START)
+    def test_start_rounds_up_to_the_quarter_hour(self):
+        events = plan([leg(60, 60), leg(60, 60)], START.replace(minute=7, second=30), 0)
+        self.assertEqual(events[0].start, START.replace(minute=15))
+        self.assertEqual(plan([leg(60, 60), leg(60, 60)], START, 0)[0].start, START)
 
     def test_break_after_8_hours_of_driving(self):
         events = plan([leg(540, 540), leg(60, 60)], START, 0)
@@ -58,7 +59,7 @@ class PlannerTests(TestCase):
         # the 11-hour limit always comes first. A 5-hour load exercises the window directly.
         trip = Trip(START, 0)
         trip.add("pickup", "on", 300)
-        trip.drive(leg(600, 600))
+        trip.drive([leg(600, 600)], 600)
         self.assertEqual(kinds(trip.events), ["pickup", "pretrip", "drive", "break", "rest", "pretrip", "drive"])
         self.assertEqual(trip.events[4].start, START + timedelta(hours=14))
         self.assertEqual(driving(trip.events[:4]), 480)
@@ -87,6 +88,17 @@ class PlannerTests(TestCase):
             kinds(events),
             ["pretrip", "drive", "break", "drive", "restart", "pretrip", "drive", "pickup", "drive", "dropoff"],
         )
+
+    def test_restart_instead_of_a_rest_when_it_delivers_sooner(self):
+        # At 20 hours used, the cross-country leg used to rest 10 hours, drive 90 minutes and restart.
+        legs = [leg(300, 300), leg(3000, 3000)]
+        greedy = Trip(START, 20)
+        greedy.compare_restarts = False
+        greedy.finish(legs, legs[0].minutes)
+        events = plan(legs, START, 20)
+        self.assertLess(events[-1].end, greedy.events[-1].end)
+        self.assertEqual(kinds(events).count("restart"), kinds(greedy.events).count("restart"))
+        assert_legal(self, events, legs, 20)
 
     def test_restart_comes_before_the_first_pretrip_at_70_hours(self):
         events = plan([leg(60, 60), leg(60, 60)], START, 70)
