@@ -57,8 +57,8 @@ export const DailyLogs = memo(function DailyLogs({ logs, header, onHeaderChange 
           </article>
         ))}
         <p className="no-print mt-7 text-xs text-muted">
-          Routes from OSRM or OpenRouteService. Map tiles by OpenFreeMap, map data © OpenStreetMap contributors. Place search
-          by Photon, town names from GeoNames.
+          Routes from OSRM or OpenRouteService. Map data © OpenStreetMap contributors. Place search by Photon, town names
+          from GeoNames.
         </p>
       </div>
     </section>

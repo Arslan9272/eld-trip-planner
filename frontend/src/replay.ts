@@ -19,7 +19,7 @@ export function tripTimeline(plan: Plan) {
     const { from, mile, event } = spans[index]
     const progress = event.minutes ? Math.min(1, (minute - from) / event.minutes) : 0
     const travelled = mile + event.miles * progress
-    const point = event.status === 'driving' ? locate(travelled) : ([event.lng, event.lat] as [number, number])
+    const point = event.status === 'driving' ? locate(travelled) : ([event.lat, event.lng] as [number, number])
     return { index, travelled, point }
   }
 

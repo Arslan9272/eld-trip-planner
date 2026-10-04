@@ -1,6 +1,6 @@
 import type { Leg } from './types'
 
-type LngLat = [number, number]
+type LatLng = [number, number]
 
 function haversineMiles([lat1, lng1]: [number, number], [lat2, lng2]: [number, number]) {
   const rad = Math.PI / 180
@@ -13,7 +13,7 @@ function haversineMiles([lat1, lng1]: [number, number], [lat2, lng2]: [number, n
 // Maps a trip mileage to a point on the drawn route. Each leg's geometry is stretched to the
 // routing engine's own distance so positions agree with the planner's mileage.
 export function routeLocator(legs: Leg[]) {
-  const points: LngLat[] = []
+  const points: LatLng[] = []
   const at: number[] = []
   let offset = 0
   for (const leg of legs) {
@@ -21,15 +21,15 @@ export function routeLocator(legs: Leg[]) {
     const steps = geometry.slice(1).map((p, i) => haversineMiles(geometry[i], p))
     const drawn = steps.reduce((a, b) => a + b, 0) || 1
     let run = 0
-    geometry.forEach(([lat, lng], i) => {
+    geometry.forEach((point, i) => {
       if (i) run += steps[i - 1]
-      points.push([lng, lat])
+      points.push(point)
       at.push(offset + (run / drawn) * leg.miles)
     })
     offset += leg.miles
   }
 
-  return (mile: number): LngLat => {
+  return (mile: number): LatLng => {
     const i = at.findIndex((m) => m >= mile)
     if (i === -1) return points[points.length - 1]
     if (i === 0) return points[0]

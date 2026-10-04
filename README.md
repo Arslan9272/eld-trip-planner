@@ -44,7 +44,7 @@ backend/                Django + Django REST Framework, no database
   trips/logs.py         splits the events into daily sheets
   trips/routing.py      OSRM / OpenRouteService, cached
   trips/places.py       nearest US town for remarks, offline
-frontend/               React, TypeScript, Vite, Tailwind, MapLibre
+frontend/               React, TypeScript, Vite, Tailwind, Leaflet
   src/components/LogSheet.tsx   the paper log, drawn as SVG
 ```
 
@@ -76,4 +76,4 @@ One Vercel project with two services (`vercel.json`): `frontend/` builds as a st
 
 ## Data
 
-Routes from OSRM or OpenRouteService. Map tiles by OpenFreeMap, map data © OpenStreetMap contributors. Place search by Photon. Town names from [GeoNames](https://www.geonames.org) cities1000 (CC BY 4.0), US populated places only.
+Routes from OSRM or OpenRouteService. Map tiles and data © OpenStreetMap contributors. Place search by Photon. Town names from [GeoNames](https://www.geonames.org) cities1000 (CC BY 4.0), US populated places only.

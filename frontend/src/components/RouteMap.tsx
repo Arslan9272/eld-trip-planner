@@ -1,50 +1,29 @@
-import {
-  LngLatBounds,
-  MapLibreMap,
-  Marker,
-  NavigationControl,
-  Popup,
-  setWorkerUrl,
-  type ExpressionSpecification,
-  type GeoJSONSource,
-} from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
-import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-import { useEffect, useRef, useState } from 'react'
+import L, { type LatLngTuple } from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import { useEffect, useRef } from 'react'
 import { ICON_PATHS, KIND, STATUS } from '../duty'
 import { clock, dayLabel, duration } from '../format'
 import type { Kind, Plan } from '../types'
 
-// MapLibre looks for its worker beside its own file, which bundling moves; point it at Vite's copy.
-setWorkerUrl(workerUrl)
-
-const STYLE = 'https://tiles.openfreemap.org/styles/positron'
-const TINT = [
-  ['background', 'background-color', '#E8EBE5'],
-  ['park', 'fill-color', '#DEE4DA'],
-  ['water', 'fill-color', '#C3D1D6'],
-  ['landcover_wood', 'fill-color', '#DCE2D8'],
-  ['landuse_residential', 'fill-color', '#E2E5DF'],
-] as const
+// Raster tiles and SVG lines work in every browser; a WebGL map left some Chrome setups blank.
+const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+const LOWER_48: L.LatLngBoundsExpression = [
+  [24.5, -125],
+  [49.5, -66.9],
+]
 const MAP_STOPS: Kind[] = ['fuel', 'break', 'rest', 'restart']
 const DRAW_MS = 1400
-const LINE = STATUS.driving.color
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-const reveal = (color: string, progress: number): ExpressionSpecification =>
-  ['step', ['line-progress'], color, Math.max(progress, 0.0001), 'rgba(0,0,0,0)']
 
 function icon(name: keyof typeof ICON_PATHS, color: string) {
   return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON_PATHS[name]}"/></svg>`
 }
 
-function markerElement(className: string, html: string, delay: number) {
-  const el = document.createElement('div')
-  el.className = className
-  el.innerHTML = html
-  el.style.setProperty('--delay', `${Math.round(delay)}ms`)
-  return el
+function marker(at: LatLngTuple, size: number, html: string, title = '') {
+  const markerIcon = L.divIcon({ className: '', html, iconSize: [size, size] })
+  return L.marker(at, { icon: markerIcon, title, keyboard: Boolean(title) })
 }
 
 function waypoints(plan: Plan) {
@@ -65,96 +44,83 @@ function waypoints(plan: Plan) {
 
 interface Props {
   plan: Plan | null
-  truck: [number, number] | null
-  focus: { point: [number, number]; key: number } | null
+  truck: LatLngTuple | null
+  focus: { point: LatLngTuple; key: number } | null
 }
 
 export function RouteMap({ plan, truck, focus }: Props) {
   const container = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<MapLibreMap | null>(null)
-  const truckRef = useRef<Marker | null>(null)
-  const [ready, setReady] = useState(false)
+  const mapRef = useRef<L.Map | null>(null)
+  const truckRef = useRef<L.Marker | null>(null)
 
   useEffect(() => {
-    const map = new MapLibreMap({
-      container: container.current!,
-      style: STYLE,
-      center: [-96.5, 38.5],
-      zoom: 3.4,
-      attributionControl: { compact: true },
-    })
-    map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
-    map.on('style.load', () => {
-      for (const [layer, property, color] of TINT) if (map.getLayer(layer)) map.setPaintProperty(layer, property, color)
-    })
-    map.once('load', () => setReady(true))
+    const map = L.map(container.current!, { zoomControl: false, zoomSnap: 0.5 })
+    map.attributionControl.setPrefix(false)
+    L.control.zoom({ position: 'topright' }).addTo(map)
+    L.tileLayer(TILES, { maxZoom: 18, attribution: ATTRIBUTION }).addTo(map)
+    map.fitBounds(LOWER_48)
     mapRef.current = map
-    return () => map.remove()
+    return () => {
+      map.remove()
+      mapRef.current = null
+    }
   }, [])
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !ready || !plan) return
+    if (!map || !plan) return
 
-    const coordinates = plan.legs.flatMap((leg, i) => leg.geometry.slice(i ? 1 : 0)).map(([lat, lng]) => [lng, lat])
-    const data = { type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates } }
-    const source = map.getSource<GeoJSONSource>('route')
-    if (source) source.setData(data)
-    else {
-      map.addSource('route', { type: 'geojson', data, lineMetrics: true })
-      const beforeId = map.getStyle().layers.find((layer) => layer.type === 'symbol')?.id
-      const layout = { 'line-join': 'round', 'line-cap': 'round' } as const
-      const paint = (width: number, color: string) => ({ 'line-width': width, 'line-gradient': reveal(color, 0) })
-      map.addLayer({ id: 'route-casing', type: 'line', source: 'route', layout, paint: paint(9, '#FFFFFF') }, beforeId)
-      map.addLayer({ id: 'route-line', type: 'line', source: 'route', layout, paint: paint(4.5, LINE) }, beforeId)
-    }
-
-    const bounds = coordinates.reduce((b, c) => b.extend(c as [number, number]), new LngLatBounds())
+    const route = plan.legs.flatMap((leg, i) => leg.geometry.slice(i ? 1 : 0))
     const small = map.getContainer().clientWidth < 640
-    map.fitBounds(bounds, {
-      // Desktop leaves room for the distance sign (top left), replay control and legend.
-      padding: small ? { top: 50, bottom: 90, left: 30, right: 30 } : { top: 200, bottom: 110, left: 80, right: 100 },
-      duration: reducedMotion() ? 0 : 900,
-      maxZoom: 11,
+    // Desktop leaves room for the distance sign (top left), replay control and legend.
+    map.fitBounds(L.latLngBounds(route), {
+      paddingTopLeft: small ? [30, 50] : [80, 200],
+      paddingBottomRight: small ? [30, 90] : [100, 110],
+      animate: false,
     })
 
-    const total = plan.summary.miles || 1
     const drawMs = reducedMotion() ? 0 : DRAW_MS
-    const markers: Marker[] = []
+    const casing = L.polyline([], { color: '#FFFFFF', weight: 9, opacity: 0.95, interactive: false }).addTo(map)
+    const line = L.polyline([], { color: STATUS.driving.color, weight: 4.5, interactive: false }).addTo(map)
+
+    const total = plan.summary.miles || 1
+    const markers: L.Marker[] = []
     for (const point of waypoints(plan)) {
-      const el = markerElement('waypoint', `<span>${point.label}</span>`, (point.mile / total) * drawMs)
-      markers.push(new Marker({ element: el }).setLngLat([point.at[1], point.at[0]]).addTo(map))
+      const delay = (point.mile / total) * drawMs
+      markers.push(marker(point.at, 12, `<div class="waypoint" style="--delay:${delay}ms"><span>${point.label}</span></div>`))
     }
     let mile = 0
     for (const event of plan.events) {
       if (MAP_STOPS.includes(event.kind)) {
         const { color, ink } = STATUS[event.status]
-        const el = markerElement('stop', icon(event.kind, ink), (mile / total) * drawMs)
-        el.style.background = color
-        el.setAttribute('aria-label', `${KIND[event.kind].label}, ${event.place}`)
-        const popup = new Popup({ offset: 18, closeButton: false }).setText(
-          `${KIND[event.kind].label}, ${event.place}. ${dayLabel(event.start)} ${clock(event.start)}, ${duration(event.minutes)}`,
-        )
-        markers.push(new Marker({ element: el }).setLngLat([event.lng, event.lat]).setPopup(popup).addTo(map))
+        const delay = (mile / total) * drawMs
+        const label = `${KIND[event.kind].label}, ${event.place}`
+        const html = `<div class="stop" style="--delay:${delay}ms;background:${color}">${icon(event.kind, ink)}</div>`
+        const popup = document.createElement('div')
+        popup.textContent = `${label}. ${dayLabel(event.start)} ${clock(event.start)}, ${duration(event.minutes)}`
+        markers.push(marker([event.lat, event.lng], 28, html, label).bindPopup(popup, { closeButton: false, offset: [0, -8] }))
       }
       mile += event.miles
     }
+    markers.forEach((m) => m.addTo(map))
 
+    // Draw the route in by handing the lines a growing slice of their points.
     let frame = 0
     const started = performance.now()
     const draw = (now: number) => {
       const progress = drawMs ? Math.min(1, (now - started) / drawMs) : 1
-      map.setPaintProperty('route-casing', 'line-gradient', reveal('#FFFFFF', progress))
-      map.setPaintProperty('route-line', 'line-gradient', reveal(LINE, progress))
+      const shown = route.slice(0, Math.max(2, Math.ceil(progress * route.length)))
+      casing.setLatLngs(shown)
+      line.setLatLngs(shown)
       if (progress < 1) frame = requestAnimationFrame(draw)
     }
     frame = requestAnimationFrame(draw)
 
     return () => {
       cancelAnimationFrame(frame)
-      markers.forEach((marker) => marker.remove())
+      ;[casing, line, ...markers].forEach((layer) => layer.remove())
     }
-  }, [plan, ready])
+  }, [plan])
 
   useEffect(() => {
     const map = mapRef.current
@@ -163,17 +129,15 @@ export function RouteMap({ plan, truck, focus }: Props) {
       truckRef.current = null
       return
     }
-    if (!truckRef.current) {
-      const el = markerElement('truck', icon('drive', '#FFFFFF'), 0)
-      truckRef.current = new Marker({ element: el }).setLngLat(truck).addTo(map)
-    } else truckRef.current.setLngLat(truck)
+    if (truckRef.current) truckRef.current.setLatLng(truck)
+    else truckRef.current = marker(truck, 32, `<div class="truck">${icon('drive', '#FFFFFF')}</div>`).setZIndexOffset(1000).addTo(map)
   }, [truck])
 
   useEffect(() => {
     const map = mapRef.current
-    if (focus && map) map.easeTo({ center: focus.point, zoom: Math.max(map.getZoom(), 7), duration: reducedMotion() ? 0 : 700 })
+    if (focus && map) map.flyTo(focus.point, Math.max(map.getZoom(), 7), { duration: reducedMotion() ? 0 : 0.7 })
   }, [focus])
 
-  // maplibre-gl.css makes the container position: relative, so size it rather than pin it.
-  return <div ref={container} className="h-full w-full" role="region" aria-label="Route map" />
+  // isolate keeps Leaflet's pane z-indexes inside the map, under the overlays drawn after it.
+  return <div ref={container} className="isolate h-full w-full bg-concrete" role="region" aria-label="Route map" />
 }

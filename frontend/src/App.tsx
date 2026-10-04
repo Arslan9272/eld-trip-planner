@@ -1,16 +1,14 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { planTrip } from './api'
 import { DailyLogs } from './components/DailyLogs'
 import { Itinerary } from './components/Itinerary'
 import { GuideSign, Legend, ReplayControl } from './components/MapOverlays'
+import { RouteMap } from './components/RouteMap'
 import { TripForm, type TripFormState } from './components/TripForm'
 import { TripSummary } from './components/TripSummary'
 import { miles, minutesBetween, nextQuarterHour } from './format'
 import { tripTimeline, useReplay } from './replay'
 import type { Plan, SheetHeader, TripInput } from './types'
-
-// MapLibre is most of the bundle; the form renders while it loads.
-const RouteMap = lazy(() => import('./components/RouteMap').then((m) => ({ default: m.RouteMap })))
 
 const HEADER_KEY = 'eld-sheet-header'
 const EMPTY_HEADER: SheetHeader = { carrier: '', office: '', terminal: '', vehicles: '', manifest: '', shipper: '' }
@@ -67,7 +65,7 @@ export default function App() {
     const event = plan.events[index]
     replay.pause()
     replay.seek(minutesBetween(plan.summary.start, event.start))
-    setFocus({ point: [event.lng, event.lat], key: Date.now() })
+    setFocus({ point: [event.lat, event.lng], key: Date.now() })
   }
 
   const changeHeader = useCallback((next: SheetHeader) => {
@@ -109,9 +107,7 @@ export default function App() {
           </div>
 
           <div className="workspace-map relative h-[360px] overflow-hidden sm:h-[460px] lg:h-auto">
-            <Suspense>
-              <RouteMap plan={plan} truck={position?.point ?? null} focus={focus} />
-            </Suspense>
+            <RouteMap plan={plan} truck={position?.point ?? null} focus={focus} />
             {plan && timeline ? (
               <>
                 <GuideSign plan={plan} />
