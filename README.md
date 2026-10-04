@@ -28,7 +28,7 @@ Assumptions:
 - The driver starts the trip rested. "Hours used" comes without day-by-day history, so those hours stay on the books for the whole trip and only a 34-hour restart frees them. The recap's 7-day and 8-day lines show that same total.
 - Loading or unloading may carry the cycle past 70 hours after the last drive. That is legal (no driving happens past the limit), and the summary and sheet say so.
 - Rests are full 10-hour sleeper-berth periods; split sleeper berth (7/3, 8/2) is not planned.
-- Without an OpenRouteService key, routes come from the public OSRM server, which uses car speeds. With `ORS_API_KEY` set, the backend asks for a truck (HGV) route and falls back to OSRM if that fails.
+- Routes and drive times come from the public OSRM server. With `ORS_API_KEY` set, OpenRouteService takes over whenever OSRM is down or rate-limited. It is the backup rather than the default because its truck profile runs well under interstate speeds (Chicago to Indianapolis in 4 h 45 min, against about 3 h 30 min real-world).
 
 ## The log sheets
 
@@ -72,7 +72,7 @@ npm run dev
 
 ## Deploy
 
-One Vercel project with two services (`vercel.json`): `frontend/` builds as a static site, `backend/` runs Django as a Python function, and `/api/*` is routed to it. Environment variables: `DJANGO_SECRET_KEY` (required), `ORS_API_KEY` (optional).
+One Vercel project with two services (`vercel.json`): `frontend/` builds as a static site, `backend/` runs Django as a Python function, and `/api/*` is routed to it. Environment variables: `DJANGO_SECRET_KEY` (required), `ORS_API_KEY` (optional, routing fallback).
 
 ## Data
 

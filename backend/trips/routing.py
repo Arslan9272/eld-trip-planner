@@ -43,13 +43,14 @@ def route(origin, destination):
 
 @lru_cache(maxsize=256)
 def fetch(a, b):
-    leg = None
-    if os.environ.get("ORS_API_KEY"):
-        try:
-            leg = fetch_ors(a, b)
-        except RoutingError:
-            pass  # fall back to OSRM
-    return leg or fetch_osrm(a, b)
+    try:
+        return fetch_osrm(a, b)
+    except RoutingError:
+        # The public OSRM server makes no uptime promise. OpenRouteService takes over when a key
+        # is set; it stays the backup because its truck profile runs well under interstate speeds.
+        if not os.environ.get("ORS_API_KEY"):
+            raise
+        return fetch_ors(a, b)
 
 
 def fetch_ors(a, b):

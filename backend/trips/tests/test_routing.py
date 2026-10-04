@@ -35,26 +35,24 @@ class RoutingTests(TestCase):
         self.assertEqual(leg.points, ((41.0, -87.0), (41.5, -87.5)))
 
     @patch.dict("os.environ", {"ORS_API_KEY": "key"})
-    @patch("trips.routing.urlopen")
-    def test_ors_truck_route_when_a_key_is_set(self, urlopen):
+    def test_osrm_outage_falls_back_to_openrouteservice(self):
+        outage = HTTPError("url", 503, "Unavailable", {}, io.BytesIO())
         feature = {
             "properties": {"summary": {"distance": 32186.88, "duration": 1800}},
             "geometry": {"coordinates": [[-87.0, 41.0], [-87.5, 41.5]]},
         }
-        urlopen.return_value = io.BytesIO(json.dumps({"features": [feature]}).encode())
-        leg = route(A, B)
+        ors = io.BytesIO(json.dumps({"features": [feature]}).encode())
+        with patch("trips.routing.urlopen", side_effect=[outage, ors]) as urlopen:
+            leg = route(A, B)
         self.assertEqual(urlopen.call_args.args[0].get_header("Authorization"), "key")
         self.assertAlmostEqual(leg.miles, 20.0)
         self.assertEqual(leg.minutes, 30)
 
-    @patch.dict("os.environ", {"ORS_API_KEY": "key"})
-    def test_ors_failure_falls_back_to_osrm(self):
-        outage = HTTPError("url", 403, "Forbidden", {}, io.BytesIO())
-        osrm = osrm_response(16093.44, 1000, [[-87.0, 41.0], [-87.5, 41.5]])
-        with patch("trips.routing.urlopen", side_effect=[outage, osrm]) as urlopen:
-            leg = route(A, B)
-        self.assertEqual(urlopen.call_count, 2)
-        self.assertEqual(leg.minutes, 15)
+    def test_osrm_outage_without_a_key_is_reported(self):
+        outage = HTTPError("url", 503, "Unavailable", {}, io.BytesIO())
+        with patch("trips.routing.urlopen", side_effect=outage), self.assertRaises(RoutingError) as caught:
+            route(A, B)
+        self.assertEqual(caught.exception.status, 502)
 
     def test_impossible_route_is_a_400(self):
         error = HTTPError("url", 400, "Bad Request", {}, io.BytesIO(b'{"code": "NoRoute"}'))
