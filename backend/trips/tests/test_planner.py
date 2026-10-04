@@ -1,6 +1,7 @@
 import math
 import random
 from datetime import datetime, timedelta
+from itertools import pairwise
 from unittest import TestCase
 
 from trips.logs import build_logs
@@ -68,7 +69,7 @@ class PlannerTests(TestCase):
         events = plan([leg(100, 105), leg(2500, 2490)], START, 0)
         stops = [0.0] + [event.start_mile for event in events if event.kind == "fuel"] + [events[-1].end_mile]
         self.assertGreaterEqual(len(stops), 4)
-        for before, after in zip(stops, stops[1:]):
+        for before, after in pairwise(stops):
             self.assertLessEqual(after - before, 1000 + 1e-6)
 
     def test_restart_once_70_hours_are_used(self):
@@ -134,7 +135,7 @@ def assert_legal(test, events, legs, cycle_used):
     test.assertEqual([kind for kind in kinds(events) if kind in ("pickup", "dropoff")], ["pickup", "dropoff"])
     test.assertEqual(events[-1].kind, "dropoff")
     test.assertEqual(driving(events), sum(leg.minutes for leg in legs))
-    for before, after in zip(events, events[1:]):
+    for before, after in pairwise(events):
         test.assertEqual(before.end, after.start)
 
     cycle = math.ceil(cycle_used * 4) * 15
@@ -193,7 +194,7 @@ def assert_valid_logs(test, events):
     for day in logs:
         segments = day["segments"]
         test.assertEqual((segments[0]["start"], segments[-1]["end"]), (0, 1440))
-        for before, after in zip(segments, segments[1:]):
+        for before, after in pairwise(segments):
             test.assertEqual(before["end"], after["start"])
             test.assertNotEqual(before["status"], after["status"])
         test.assertEqual(sum(day["totals"].values()), 1440)

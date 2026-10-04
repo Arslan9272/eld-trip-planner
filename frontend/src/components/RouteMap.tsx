@@ -5,7 +5,7 @@ import { ICON_PATHS, KIND, STATUS } from '../duty'
 import { clock, dayLabel, duration } from '../format'
 import type { Kind, Plan } from '../types'
 
-// Raster tiles and SVG lines work in every browser; a WebGL map left some Chrome setups blank.
+// Raster tiles and SVG lines need no WebGL, so the map draws in every browser.
 const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 const LOWER_48: L.LatLngBoundsExpression = [

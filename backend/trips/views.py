@@ -29,7 +29,7 @@ def plan_trip(request):
     return Response(
         {
             "summary": summarize(legs, events, logs),
-            "legs": [leg_json(leg, a, b) for leg, (a, b) in zip(legs, pairwise(stops))],
+            "legs": [leg_json(leg, a, b) for leg, (a, b) in zip(legs, pairwise(stops), strict=True)],
             "events": [event_json(event, legs) for event in events],
             "logs": logs,
         }
