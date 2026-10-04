@@ -8,9 +8,10 @@ interface Props {
   logs: DayLog[]
   header: SheetHeader
   onHeaderChange: (header: SheetHeader) => void
+  onPrint: () => void
 }
 
-export const DailyLogs = memo(function DailyLogs({ logs, header, onHeaderChange }: Props) {
+export const DailyLogs = memo(function DailyLogs({ logs, header, onHeaderChange, onPrint }: Props) {
   const range = logs.length > 1 ? `, ${dayLabel(logs[0].date)} to ${dayLabel(logs[logs.length - 1].date)}` : ''
   return (
     <section aria-labelledby="logs-title" className="logs px-4 pt-12 pb-16 sm:px-6">
@@ -23,16 +24,16 @@ export const DailyLogs = memo(function DailyLogs({ logs, header, onHeaderChange 
             <p className="mt-1.5 text-[15px] text-muted">
               {logs.length} {logs.length === 1 ? 'sheet' : 'sheets'}
               {range}. Click a blank on a sheet to fill it in; carrier, addresses, truck and shipping details carry over
-              to every day.
+              to every day. After printing, the trip is saved and the planner clears for the next one.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={onPrint}
             className="no-print flex h-11 items-center gap-2 rounded-lg border-[1.5px] border-asphalt bg-white px-[18px] text-[15px] font-semibold hover:bg-concrete"
           >
             <Icon name="print" size={18} />
-            Print logs
+            Print and save
           </button>
         </div>
         {logs.length > 1 && (

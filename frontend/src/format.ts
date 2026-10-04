@@ -26,6 +26,8 @@ export const hours = (minutes: number) => String(Math.round((minutes / 60) * 100
 
 export const miles = (value: number) => Math.round(value).toLocaleString('en-US')
 
+export const town = (name: string) => name.split(',')[0]
+
 export function nextQuarterHour(now = new Date()) {
   const d = new Date(now)
   d.setSeconds(0, 0)

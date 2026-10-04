@@ -1,14 +1,17 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { planTrip } from './api'
 import { DailyLogs } from './components/DailyLogs'
+import { Icon } from './components/Icon'
 import { Itinerary } from './components/Itinerary'
 import { GuideSign, Legend, ReplayControl } from './components/MapOverlays'
 import { RouteMap } from './components/RouteMap'
+import { SavedTrips } from './components/SavedTrips'
 import { TripForm, type TripFormState } from './components/TripForm'
 import { TripSummary } from './components/TripSummary'
-import { miles, minutesBetween, nextQuarterHour } from './format'
+import { miles, minutesBetween, nextQuarterHour, town } from './format'
 import { tripTimeline, useReplay } from './replay'
-import type { Plan, SheetHeader, TripInput } from './types'
+import { loadSavedTrips, storeSavedTrips, type SavedTrip } from './savedTrips'
+import type { Place, Plan, SheetHeader, TripInput } from './types'
 
 const HEADER_KEY = 'eld-sheet-header'
 const EMPTY_HEADER: SheetHeader = { carrier: '', office: '', terminal: '', vehicles: '', manifest: '', shipper: '' }
@@ -22,14 +25,27 @@ function loadHeader(): SheetHeader {
   }
 }
 
+const blankForm = (): TripFormState => ({
+  current: emptyStop,
+  pickup: emptyStop,
+  dropoff: emptyStop,
+  cycle: '0',
+  start: nextQuarterHour(),
+})
+
+function formFor(input: TripInput): TripFormState {
+  const field = (place: Place) => ({ text: place.name, place })
+  return {
+    current: field(input.current),
+    pickup: field(input.pickup),
+    dropoff: field(input.dropoff),
+    cycle: String(input.cycle_used),
+    start: input.start,
+  }
+}
+
 export default function App() {
-  const [form, setForm] = useState<TripFormState>(() => ({
-    current: emptyStop,
-    pickup: emptyStop,
-    dropoff: emptyStop,
-    cycle: '0',
-    start: nextQuarterHour(),
-  }))
+  const [form, setForm] = useState(blankForm)
   const [input, setInput] = useState<TripInput | null>(null)
   const [plan, setPlan] = useState<Plan | null>(null)
   const [editing, setEditing] = useState(true)
@@ -37,6 +53,10 @@ export default function App() {
   const [error, setError] = useState('')
   const [header, setHeader] = useState(loadHeader)
   const [focus, setFocus] = useState<{ point: [number, number]; key: number } | null>(null)
+  const [saved, setSaved] = useState(loadSavedTrips)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [flashId, setFlashId] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
 
   const timeline = useMemo(() => (plan ? tripTimeline(plan) : null), [plan])
   const replay = useReplay(timeline?.total ?? 0)
@@ -46,11 +66,13 @@ export default function App() {
     setForm(nextForm)
     setBusy(true)
     setError('')
+    setNotice('')
     try {
       const result = await planTrip(next)
       replay.reset()
       setPlan(result)
       setInput(next)
+      setOpenId(null)
       setEditing(false)
       requestAnimationFrame(() => document.getElementById('trip-title')?.focus())
     } catch (e) {
@@ -77,6 +99,62 @@ export default function App() {
     }
   }, [])
 
+  function show(trip: { plan: Plan | null; input: TripInput | null }) {
+    replay.reset()
+    setPlan(trip.plan)
+    setInput(trip.input)
+    setFocus(null)
+    setError('')
+    setEditing(!trip.plan)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function saveTrip() {
+    if (!plan || !input) return
+    const trip: SavedTrip = { id: openId ?? crypto.randomUUID(), savedAt: new Date().toISOString(), input, plan, header }
+    try {
+      setSaved(storeSavedTrips([trip, ...saved.filter((t) => t.id !== trip.id)]))
+    } catch {
+      setNotice('This browser has no room left to save trips. Delete an older trip and try again.')
+      return
+    }
+    show({ plan: null, input: null })
+    setForm(blankForm())
+    setOpenId(null)
+    setFlashId(trip.id)
+    // Carrier and truck usually stay the same for the next trip; the load's paperwork does not.
+    changeHeader({ ...header, manifest: '', shipper: '' })
+    setNotice(`Saved ${town(input.current.name)} to ${town(input.dropoff.name)}. The planner is ready for the next trip.`)
+  }
+
+  function openTrip(trip: SavedTrip) {
+    show(trip)
+    setForm(formFor(trip.input))
+    setOpenId(trip.id)
+    setNotice('')
+    changeHeader(trip.header)
+  }
+
+  function deleteTrip(id: string) {
+    try {
+      setSaved(storeSavedTrips(saved.filter((t) => t.id !== id)))
+    } catch {
+      return
+    }
+    if (id === openId) setOpenId(null)
+  }
+
+  // Printing files the trip away too: once the dialog closes, save it and clear the planner.
+  // The ref keeps onPrint stable, so the memoised log sheets don't redraw on every replay frame.
+  const saveLatest = useRef(saveTrip)
+  useEffect(() => {
+    saveLatest.current = saveTrip
+  })
+  const printAndSave = useCallback(() => {
+    window.addEventListener('afterprint', () => saveLatest.current(), { once: true })
+    window.print()
+  }, [])
+
   const showResults = plan && input && !editing
 
   return (
@@ -93,8 +171,25 @@ export default function App() {
         <div className="workspace no-print">
           <div className="workspace-side bg-white lg:border-r lg:border-rule">
             <div className="workspace-panel bg-white">
+              <div aria-live="polite">
+                {notice && (
+                  <p className="mx-7 mt-6 -mb-2 flex items-start gap-2.5 rounded-lg bg-[#E3EFE8] px-3.5 py-3 text-sm leading-snug text-[#0D4A35]">
+                    <span className="mt-px">
+                      <Icon name="pretrip" size={18} />
+                    </span>
+                    <span>
+                      {notice}{' '}
+                      {saved.length > 0 && (
+                        <a href="#saved-trips" className="font-semibold underline">
+                          See saved trips
+                        </a>
+                      )}
+                    </span>
+                  </p>
+                )}
+              </div>
               {showResults ? (
-                <TripSummary plan={plan} input={input} onEdit={() => setEditing(true)} />
+                <TripSummary plan={plan} input={input} onEdit={() => setEditing(true)} onSave={saveTrip} />
               ) : (
                 <TripForm initial={form} busy={busy} error={error} onPlan={handlePlan} />
               )}
@@ -141,7 +236,8 @@ export default function App() {
           {plan ? `Trip planned: ${miles(plan.summary.miles)} miles, ${plan.logs.length} log ${plan.logs.length === 1 ? 'sheet' : 'sheets'}.` : ''}
         </p>
 
-        {plan && <DailyLogs logs={plan.logs} header={header} onHeaderChange={changeHeader} />}
+        {plan && <DailyLogs logs={plan.logs} header={header} onHeaderChange={changeHeader} onPrint={printAndSave} />}
+        <SavedTrips trips={saved} openId={openId} flashId={flashId} onOpen={openTrip} onDelete={deleteTrip} />
       </main>
     </div>
   )

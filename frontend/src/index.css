@@ -73,6 +73,16 @@
   background: #f2b705;
   animation: progress 1.1s ease-in-out infinite;
 }
+/* A trip just saved lights up briefly in the table. */
+.row-saved {
+  animation: saved 2.4s ease-out;
+}
+@keyframes saved {
+  from {
+    background: #cfe5d8;
+  }
+}
+
 @keyframes progress {
   from {
     transform: translateX(-100%);

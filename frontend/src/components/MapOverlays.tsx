@@ -1,9 +1,7 @@
 import { LEGEND_ORDER, STATUS } from '../duty'
-import { addMinutes, clock, dayLabel, miles } from '../format'
+import { addMinutes, clock, dayLabel, miles, town } from '../format'
 import type { Plan } from '../types'
 import { Icon } from './Icon'
-
-const town = (name: string) => name.split(',')[0]
 
 export function GuideSign({ plan }: { plan: Plan }) {
   const [toPickup, toDropoff] = plan.legs

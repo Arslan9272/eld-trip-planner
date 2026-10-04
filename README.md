@@ -34,7 +34,9 @@ Assumptions:
 
 Each sheet copies the blank FMCSA driver's daily log: the duty-status line across the four rows, totals that add up to 24 hours, a remark at every change to a non-driving status (city and state, written at 45°), brackets under on-duty stops where the truck did not move, the day's miles and the 70-hour recap. The trip produces as many sheets as calendar days it touches.
 
-Carrier, office and terminal addresses, truck and trailer numbers and shipping documents are blanks you click and fill in. They carry over to every sheet and are remembered in the browser. **Print logs** puts one sheet on each page.
+Carrier, office and terminal addresses, truck and trailer numbers and shipping documents are blanks you click and fill in. They carry over to every sheet and are remembered in the browser.
+
+**Save and start a new trip** (or **Print and save**, which prints one sheet per page first) files the trip in a saved-trips table and clears the planner for the next one. Saved trips stay in the browser and reopen with their map, schedule and sheets. Carrier and truck details carry into the next trip; the manifest and shipper clear, since they belong to the load.
 
 ## Layout
 

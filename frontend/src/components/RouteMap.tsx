@@ -68,7 +68,11 @@ export function RouteMap({ plan, truck, focus }: Props) {
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !plan) return
+    if (!map) return
+    if (!plan) {
+      map.fitBounds(LOWER_48)
+      return
+    }
 
     const route = plan.legs.flatMap((leg, i) => leg.geometry.slice(i ? 1 : 0))
     const small = map.getContainer().clientWidth < 640
