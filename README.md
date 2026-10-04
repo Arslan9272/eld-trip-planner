@@ -4,7 +4,7 @@ Plan a truck trip under FMCSA hours-of-service rules and get the driver's daily 
 
 Enter the current location, pickup, drop-off and the hours already used in the 70-hour cycle. The app routes the trip, schedules every inspection, break, fuel stop and rest the rules call for, shows them on a map, and draws one paper log sheet per day.
 
-- Live app: _link_
+- Live app: https://eld-trip-planner-arslan.vercel.app
 - Walkthrough video: _link_
 
 ## How a plan is built
